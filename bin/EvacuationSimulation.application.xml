@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<applicationtype xmlns="http://jadex.sourceforge.net/jadex"
+	xmlns:agr="http://jadex.sourceforge.net/jadex-agrspace"
+	xmlns:env="http://jadex.sourceforge.net/jadex-envspace"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://jadex.sourceforge.net/jadex 
+	                    http://jadex.sourceforge.net/jadex-application-2.4.xsd
+	                    http://jadex.sourceforge.net/jadex-agrspace 
+	                    http://jadex.sourceforge.net/jadex-agrspace-2.4.xsd
+	                    http://jadex.sourceforge.net/jadex-envspace 
+	                    http://jadex.sourceforge.net/jadex-envspace-2.4.xsd"
+                 name="EvacuationSimulation" >
+
+    <imports>
+        <import>jadex.extension.envsupport.environment.space2d.*</import>
+        <import>jadex.extension.envsupport.environment.DeltaTimeExecutor</import>
+        <import>jadex.extension.envsupport.dataview.*</import>
+        <import>jadex.extension.envsupport.math.*</import>
+        <import>jadex.extension.envsupport.observer.perspective.*</import>
+        <import>jadex.extension.envsupport.evaluation.*</import>
+        <import>jadex.extension.envsupport.observer.gui.plugin.*</import>
+        <import>jadex.commons.future.*</import>
+		<import>jadex.bridge.service.*</import>
+		<import>jadex.bridge.service.search.*</import>
+		<import>jadex.bridge.service.types.clock.IClockService</import>
+
+
+    </imports>
+
+    <extensiontypes>		
+        <env:envspacetype name="2dspace" class="ContinuousSpace2D" width="30" height="30">
+            <env:objecttypes>
+
+                <env:objecttype name="terrain">
+                    <env:property name="position" class="IVector2"/>
+                    <env:property name="type" class="String"/>
+                </env:objecttype>
+				
+				<!-- Person Direction
+					1: UP
+					2: DOWN
+					3: LEFT
+					4: RIGHT -->
+                <env:objecttype name="person">
+                	<env:property name="id" class="int"/>
+                    <env:property name="position" class="IVector2"/>
+                    <env:property name="speed" class="Double"/>
+                    <env:property name="alive" class="boolean"/>
+                    <env:property name="wounded" class="boolean">false</env:property>
+                    <env:property name="direction" class="int"/>
+                    <env:property name="physicalCondition" class="int"/>
+                    <env:property name="colisionRadius" class="int">0.5</env:property>
+                    <env:property name="down" class="boolean">false</env:property>
+                    <env:property name="stunned" class="boolean">false</env:property>
+                    <env:property name="agroAction" class="boolean"/>
+                    <env:property name="agroValue" class="int"/>
+                </env:objecttype>
+                
+                <env:objecttype name="security">
+                    <env:property name="position" class="IVector2"/>
+                    <env:property name="speed" class="Double"/>
+                    <env:property name="direction" class="int"/>
+                </env:objecttype>
+                
+                <env:objecttype name="door">
+                    <env:property name="position" class="IVector2"/>
+                </env:objecttype>
+                
+                <!-- Object type:
+                	0: Obstacle
+                	1: Wall Face
+                	2: Wall Not Face -->
+                <env:objecttype name="obstacle">
+                    <env:property name="position" class="IVector2"/>
+                    <env:property name="traversable" class="boolean"/>
+                    <env:property name="movable" class="boolean"/>
+                    <env:property name="type" class="int"/>
+                </env:objecttype>
+                
+                <env:objecttype name="waypoint">
+                    <env:property name="position" class="IVector2"/>
+                </env:objecttype>
+            </env:objecttypes>
+
+            <env:processtypes>
+                <env:processtype name="createFloorPlan" class="FloorPlanCreationProcess"/>
+            </env:processtypes>
+
+            <env:avatarmappings>
+                <env:avatarmapping componenttype="Person" objecttype="person"/>
+                <env:avatarmapping componenttype="Security" objecttype="security"/>
+            </env:avatarmappings>
+
+
+            <env:dataviews>
+                <env:dataview name="all_view" class="GeneralDataView2D" />
+            </env:dataviews>
+
+
+            <env:perspectives>
+                <env:perspective name="icons" class="Perspective2D" objectplacement="center">
+                    <env:drawable objecttype="waypoint" height="0.75" width="0.75">
+                        <env:texturedrectangle layer="2" imagepath="images/waypoint.jpg"/>
+                    </env:drawable>
+					
+					<env:drawable objecttype="door" height="1.0" width="1.0">
+                        <env:texturedrectangle layer="1" imagepath="images/door_icon.png"/>
+                    </env:drawable>
+                    
+                    <!-- Object type:
+                	0: Obstacle
+                	1: Wall Face
+                	2: Wall Not Face -->
+                    <env:drawable objecttype="obstacle" height="1.0" width="1.0">
+                        <env:texturedrectangle layer="1" imagepath="images/obstacle.png">
+                            <env:drawcondition>$object.type.equals(0)</env:drawcondition>
+                        </env:texturedrectangle>
+
+                        <env:texturedrectangle layer="1" imagepath="images/wall_face_2.png">
+                            <env:drawcondition>$object.type.equals(1)</env:drawcondition>
+                        </env:texturedrectangle>
+
+                        <env:texturedrectangle layer="1" imagepath="images/wall_not_face.png">
+                            <env:drawcondition>$object.type.equals(2)</env:drawcondition>
+                        </env:texturedrectangle>
+                    </env:drawable>
+
+					
+					<env:drawable objecttype="person" height="1.0" width="0.8">
+                        <env:texturedrectangle layer="1" imagepath="images/person_dir_up.png">
+                            <env:drawcondition>$object.direction.equals(1) &amp;&amp; $object.down.equals(false)</env:drawcondition>
+                        </env:texturedrectangle>
+
+                        <env:texturedrectangle layer="1" imagepath="images/person_dir_down.png">
+                            <env:drawcondition>$object.direction.equals(2) &amp;&amp; $object.down.equals(false)</env:drawcondition>
+                        </env:texturedrectangle>
+                        
+                        <env:texturedrectangle layer="1" imagepath="images/person_dir_left.png">
+                            <env:drawcondition>$object.direction.equals(3) &amp;&amp; $object.down.equals(false)</env:drawcondition>
+                        </env:texturedrectangle>
+                        
+                        <env:texturedrectangle layer="1" imagepath="images/person_dir_right.png">
+                            <env:drawcondition>$object.direction.equals(4) &amp;&amp; $object.down.equals(false)</env:drawcondition>
+                        </env:texturedrectangle>
+                        
+                        <env:texturedrectangle layer="1" imagepath="images/person_down.png">
+                            <env:drawcondition>$object.down.equals(true) &amp;&amp; $object.alive.equals(true)</env:drawcondition>
+                        </env:texturedrectangle>
+                        
+                        <env:texturedrectangle layer="1" imagepath="images/person_dead.png">
+                            <env:drawcondition>$object.alive.equals(false)</env:drawcondition>
+                        </env:texturedrectangle>
+                        
+                         <env:text layer="2" x="0.25" y="-0.25" size="8" font="Arial" abssize="true" text="$physicalCondition$" align="left" color="white">
+                    	 	<env:drawcondition>$object.alive.equals(true)</env:drawcondition>
+                    	 </env:text>
+                    	 
+                    	 <env:text layer="2" x="-0.75" y="0.75" size="8" font="Arial" abssize="true" text="D" align="left" color="white">
+                    	 	<env:drawcondition>$object.wounded.equals(false) &amp;&amp; $object.down.equals(true)</env:drawcondition>
+                    	 </env:text>
+                    	 
+                    	 <env:text layer="2" x="-0.75" y="0.75" size="8" font="Arial" abssize="true" text="W" align="left" color="white">
+                    	 	<env:drawcondition>$object.wounded.equals(true)</env:drawcondition>
+                    	 </env:text>
+                    	
+						 <env:text layer="2" x="-0.75" y="0.75" size="8" font="Arial" abssize="true" text="S" align="left" color="white">
+                    	 	<env:drawcondition>$object.stunned.equals(true)  &amp;&amp; $object.wounded.equals(false) </env:drawcondition>
+                    	 </env:text>
+                    </env:drawable>
+                    
+                    <env:drawable objecttype="security" height="1.0" width="0.8">
+                        <env:texturedrectangle layer="1" imagepath="images/sec_dir_up.png">
+                            <env:drawcondition>$object.direction.equals(1)</env:drawcondition>
+                        </env:texturedrectangle>
+
+                        <env:texturedrectangle layer="1" imagepath="images/sec_dir_down.png">
+                            <env:drawcondition>$object.direction.equals(2)</env:drawcondition>
+                        </env:texturedrectangle>
+                        
+                         <env:texturedrectangle layer="1" imagepath="images/sec_dir_left.png">
+                            <env:drawcondition>$object.direction.equals(3)</env:drawcondition>
+                        </env:texturedrectangle>
+                        
+                         <env:texturedrectangle layer="1" imagepath="images/sec_dir_right.png">
+                            <env:drawcondition>$object.direction.equals(4)</env:drawcondition>
+                        </env:texturedrectangle>
+                    </env:drawable>
+
+                    <env:prelayers>
+                        <env:tiledlayer width="0.25" height="0.25" imagepath="images/terrain_1.png" />
+                    </env:prelayers>
+
+                </env:perspective>
+            </env:perspectives>
+
+            <!-- executor -->
+            <env:spaceexecutor class="DeltaTimeExecutor">
+                <env:property name="space">$space</env:property>
+                <env:property name="tick">true</env:property>
+            </env:spaceexecutor>
+        </env:envspacetype>
+    </extensiontypes>
+
+    <componenttypes>
+        <componenttype name="Person" filename="agents\PersonBDI.class"/>
+        <componenttype name="Security" filename="agents\SecurityBDI.class"/>
+        <componenttype name="World" filename="agents\WorldBDI.class"/>
+        <componenttype name="WaypointPainter" filename="agents\WaypointCheckerBDI.class"/>
+    </componenttypes>
+
+	<properties>
+		<property name="clock" class="IFuture">
+			SServiceProvider.getService($component.getServiceProvider(), IClockService.class, RequiredServiceInfo.SCOPE_PLATFORM)
+		</property>
+	</properties>
+
+    <configurations>
+    	<configuration name="Two People">
+            <extensions>
+                <env:envspace name="2dspace" type="2dspace">
+                    <env:processes>
+                        <env:process type="createFloorPlan"/>
+                    </env:processes>
+
+                    <env:observers>
+                        <env:observer name="Evacuation Simulation Watcher" dataview="view_all" perspective="icons"/>
+                    </env:observers>
+                </env:envspace>
+            </extensions>
+
+            <components>	
+           	    <component type="Person" number="2"/>
+           	    <component type="World"/>
+            </components>
+        </configuration>
+        
+        <configuration name="Five People + Security">
+            <extensions>
+                <env:envspace name="2dspace" type="2dspace">
+                    <env:processes>
+                        <env:process type="createFloorPlan"/>
+                    </env:processes>
+
+                    <env:observers>
+                        <env:observer name="Evacuation Simulation Watcher" dataview="view_all" perspective="icons"/>
+                    </env:observers>
+                </env:envspace>
+            </extensions>
+
+            <components>	
+           	    <component type="Person" number="5"/>
+           	    <component type="Security"/>
+                <component type="World"/>
+            </components>
+        </configuration>
+        
+        <configuration name="Collision">
+            <extensions>
+                <env:envspace name="2dspace" type="2dspace">
+                    <env:processes>
+                        <env:process type="createFloorPlan"/>
+                    </env:processes>
+
+                    <env:observers>
+                        <env:observer name="Evacuation Simulation Watcher" dataview="view_all" perspective="icons"/>
+                    </env:observers>
+                </env:envspace>
+            </extensions>
+
+            <components>	
+           	    <component type="Person" number="3"/>
+                <component type="World"/>
+            </components>
+
+        </configuration>
+        
+         <configuration name="Chaos">
+            <extensions>
+                <env:envspace name="2dspace" type="2dspace">
+                    <env:processes>
+                        <env:process type="createFloorPlan"/>
+                    </env:processes>
+
+                    <env:observers>
+                        <env:observer name="Evacuation Simulation Watcher" dataview="view_all" perspective="icons"/>
+                    </env:observers>
+                </env:envspace>
+            </extensions>
+
+            <components>	
+           	    <component type="Person" number="10"/>
+                <component type="World"/>
+            </components>
+
+        </configuration>
+        
+        <configuration name="Chaos + Security">
+            <extensions>
+                <env:envspace name="2dspace" type="2dspace">
+                    <env:processes>
+                        <env:process type="createFloorPlan"/>
+                    </env:processes>
+
+                    <env:observers>
+                        <env:observer name="Evacuation Simulation Watcher" dataview="view_all" perspective="icons"/>
+                    </env:observers>
+                </env:envspace>
+            </extensions>
+
+            <components>	
+           	    <component type="Person" number="10"/>
+           	    <component type="Security"/>
+                <component type="World"/>
+            </components>
+
+        </configuration>
+        
+        <configuration name="Waypoint Painter">
+            <extensions>
+                <env:envspace name="2dspace" type="2dspace">
+
+                    <env:processes>
+                        <env:process type="createFloorPlan"/>
+                    </env:processes>
+
+                    <env:observers>
+                        <env:observer name="Evacuation Simulation Watcher" dataview="view_all" perspective="icons"/>
+                    </env:observers>
+                </env:envspace>
+            </extensions>
+
+            <components>
+                <component type="WaypointPainter"/>
+            </components>
+
+        </configuration>
+    </configurations>
+
+</applicationtype>
